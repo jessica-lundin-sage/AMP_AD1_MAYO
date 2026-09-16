@@ -38,15 +38,14 @@ table(comb$diagnosis)
 summary(comb$RIN)
 summary(comb$PMI)
 
-#comb2 <- comb %>% filter(exclude == FALSE & (diagnosis == "Alzheimer Disease" | diagnosis == "control"))
-comb2 <- comb %>% filter(exclude == FALSE)
+# Removing samples with missing covariates
+comb2 <- comb %>% filter(exclude == FALSE )
+#comb2 <- comb2 %>% filter( !is.na(RIN))
+#comb2 <- comb2 %>% filter(!is.na(specimenIdSource)) # these get filtered out later
 
 table(comb2$diagnosis, comb2$sex, comb2$tissue)
 table(comb2$diagnosis, comb2$tissue)
 table(comb2$tissue)
-summary(comb2$RIN)
-summary(comb2$PMI)
-table(comb2$apoe4Status)
 
 #apoe4, is now #apoeGenotype (22, 23, 24, 33, 34, 44) and #apoe4Status (yes (if any 4) or no) with clinical_harmonized dataset
 table(comb$apoeGenotype, comb$apoe4Status)
