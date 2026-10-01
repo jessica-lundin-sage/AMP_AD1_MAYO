@@ -3,12 +3,18 @@ title: "AMP-AD1.0 MAYO QC"
 author: "Jessica Lundin and ADTR Science Team"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output: 
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    latex_engine: xelatex
+    number_sections: false
   html_document:
     embed-resources: true
     self_contained: true
     toc: true
     toc_depth: 2
     toc_float: true
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -24,14 +30,8 @@ pacman::p_load(synapser, dplyr, ggplot2,viridis,patchwork,matrixStats,stringr,fo
 library(httr)
 library(purrr)
 
-urls <- c(
-  "https://raw.githubusercontent.com/jessica-lundin-sage/pers_Lundin/main/RNASeq_DE/AMP_AD1/functions/functions_demo_plots_from_Jaclyn.R",
-  "https://raw.githubusercontent.com/jessica-lundin-sage/pers_Lundin/main/RNASeq_DE/AMP_AD1/functions/functions_sex_prediction.R",
-  "https://raw.githubusercontent.com/jessica-lundin-sage/pers_Lundin/main/RNASeq_DE/AMP_AD1/functions/functions_pca_outliers.R",
-  "https://raw.githubusercontent.com/jessica-lundin-sage/pers_Lundin/main/RNASeq_DE/AMP_AD1/functions/functions_RNA_metric_PCA.R",
-  "https://raw.githubusercontent.com/jessica-lundin-sage/pers_Lundin/main/RNASeq_DE/AMP_AD1/functions/functions_JB_fastqc_multiqc.R"
-  )
 
+urls <- c("https://raw.githubusercontent.com/jessica-lundin-sage/functions-amp-ad-qc/main/functions_amp-ad-qc.R")
 walk(urls, function(u) {
   resp <- httr::GET(u, add_headers(Authorization = paste("token", Sys.getenv("GITHUB_PAT"))))
   httr::stop_for_status(resp)
@@ -40,7 +40,6 @@ walk(urls, function(u) {
   source(tmp)
 })
 ```
-
 
 ```{r data-load, echo=FALSE, warning=FALSE, message=FALSE}
 # Load metadata and filtered count data
@@ -68,6 +67,7 @@ meta_age <- md_all |>
   )
 )
 
+# genes filtered out when running sex and tissue stratified filter
 delete_var <- read.csv(synapser::synGet('syn77257342')$path, sep="\t", stringsAsFactors = F, check.names = FALSE)
 delete_var2 <- delete_var$gene_id
 delete_var2 <- unique(delete_var2)
@@ -95,18 +95,31 @@ rownames(md_all) <- md_all$specimenID
 #metadata <- md_all
 ```
 
+# Files
+
+**pre-processing of metadata and count files, and QC markdown:** 
+<https://github.com/jessica-lundin-sage/AMP_AD1_MAYO>
+
+**analysis workflow:** 
+<https://github.com/jessica-lundin-sage/amd-ad-differential-expression>
+
+**functions:** 
+<https://github.com/jessica-lundin-sage/functions-amp-ad-qc>
+
+
 # Definitions
+
 **Abbreviations:** CEB = cerebellum, TCX = temporal cortex
 
 To compare analysis results across studies (cross-cohort analysis) we chose to determine AD case/control status according to neuropathological data because cohorts had variable clinical and neuropathologic diagnostic information regarding AD case status. No CERAD data was available on this cohort, but AD diagnosis according to NINCDS-ADRDA criteria was available.
 
-**AD diagnosis:** Cases were defined based on neuropathology from a single neuropathologist (Dr. Dennis W. Dickson), with LOAD cases being based on BRAAK score greater than or equal to 4 and the presence of amyloid beta plaques. 
+**AD diagnosis:** Cases were defined based on neuropathology from a single neuropathologist (Dr. Dennis W. Dickson), with LOAD cases being based on BRAAK score greater than or equal to 4 and the presence of amyloid beta plaques.
 
-**Control diagnosis:** Controls were defined as BRAAK less than or equal to 3 with no amyloid beta plaques, and lacked any other neuropathologic diagnosis for neurodegenerative disease. 
+**Control diagnosis:** Controls were defined as BRAAK less than or equal to 3 with no amyloid beta plaques, and lacked any other neuropathologic diagnosis for neurodegenerative disease.
 
 Any donors who did not fall under diagnosis or control criteria were assigned as “other”.
 
-n=54 samples excluded based on 'EXCLUDE = TRUE' from Mayo. Reasons include GeneBodyCoverage Plot (RSeQC) (n=19), Heterozygosity Outlier (n=9), Principal Components Analysis (n=5), Sex mis-match (n=9), 3rd degree relative with another sample (n=4), Eigenstrat Outlier (n=3), Does not meet control criteria (Braak > 3.0) (n=4), Low Mapped Reads (n=1)
+n=54 samples excluded based on 'EXCLUDE = TRUE' from Mayo. Reasons include GeneBodyCoverage Plot (RSeQC) (n=19), Heterozygosity Outlier (n=9), Principal Components Analysis (n=5), Sex mis-match (n=9), 3rd degree relative with another sample (n=4), Eigenstrat Outlier (n=3), Does not meet control criteria (Braak \> 3.0) (n=4), Low Mapped Reads (n=1)
 
 After the exclusion above and a restriction to those with available transcriptomic data, there were n=160 with a diagnosis of Alzheimer's Disease, n=53 with a diagnosis of "pathological aging", n=161 with a diagnosis of "progressive supranuclear palsy", and n=134 "control" participants.
 
@@ -130,18 +143,30 @@ p7<-(ggplot(meta_age, aes(x = ageDeath)) + labs(title = "ageDeath")) |>
   format_histogram_plot()
 p8<-make_bar_plot(md_all, "age_cat", facet_var = "diagnosis")
 
+rank_inverse_normal <- function(x, k = 3 / 8) {
+  r <- rank(x, na.last = "keep", ties.method = "average")
+  n <- sum(!is.na(x))
+  qnorm((r - k) / (n - 2 * k + 1))
+}
+md_all$ageDeath_invnorm <- rank_inverse_normal(md_all$ageDeath)
+
+p9 <- ggplot(md_all, aes(x = ageDeath, y = ageDeath_invnorm)) +
+  geom_point() +
+  facet_wrap(~ tissue2) +
+  ylab("ageDeath_rank_inverse_normal") +
+  theme_classic()
 
 library(patchwork)
-plot_list <- list(p1, p2, p3, p4, p5, p6, p7, p8)
+plot_list <- list(p1, p2, p3, p4, p5, p6, p7, p9)
 wrap_plots(plot_list, nrow = 4, ncol = 2)
 
 ```
 
 # Descriptive: Technical covariates
 
-number of missing for PMI: `r length(md_all[is.na(md_all$PMI),])` 
+number of missing for PMI: `r length(md_all[is.na(md_all$PMI),])`
 
-number of missing values for RIN: `r length(md_all[is.na(md_all$RIN),])` 
+number of missing values for RIN: `r length(md_all[is.na(md_all$RIN),])`
 
 ```{r generate-technical-covariate-plots, warning=FALSE, message=FALSE, fig.width=12, fig.height=5}
 #make_bar_plot_batch(md_all, "procbatch")
@@ -174,11 +199,12 @@ md_all_RIN_WARN <- md_all[(is.na(md_all$RIN) | md_all$RIN < 2.5),]
 ```
 
 # RIN
+
 **Samples were marked as QC failures if RIN was NA (n=`r nrow(md_all_RIN_na)`)**
 
-**Samples were flagged as QC warning if RIN < 2.5 (n=`r nrow(md_all_RIN_WARN)`)**
+**Samples were flagged as QC warning if RIN \< 2.5 (n=`r nrow(md_all_RIN_WARN)`)**
 
-RIN is a numerical value that indicates RNA integrity. 
+RIN is a numerical value that indicates RNA integrity.
 
 ```{r generate-RIN-plots2, warning=FALSE, message=FALSE}
 md_all_RIN_na <- md_all[is.na(md_all$RIN),] 
@@ -207,10 +233,9 @@ print(plt1)
 
 ```
 
-
 # Inferred sex
 
-Examine average expression of key Y-chromosome genes to infer the sex of each sample. Genes used are RPS4Y1, EIF1AY, DDX3Y, and KDM5D, which were determined to be robust markers for sex in Staedtler, et al (2013). 
+Examine average expression of key Y-chromosome genes to infer the sex of each sample. Genes used are RPS4Y1, EIF1AY, DDX3Y, and KDM5D, which were determined to be robust markers for sex in Staedtler, et al (2013).
 
 Samples whose inferred sex did not match their reported sex were marked as QC failures (for now).
 
@@ -241,7 +266,7 @@ names <- colnames(sc_data2)
 names(reported_sex_vector) <- names
 
 # run code 
-result <- predict_sex(sc_data2, reported = reported_sex_vector, threshold = 0)
+result <- predict_sex2(sc_data2, reported = reported_sex_vector, predict_sex = "sex_score", threshold = 0)
 result_md <- merge(result, md_brain_tissue, by.x="sample", by.y="specimenID", all=T)
 result_md_filtered <- result_md  %>% group_by(individualID) %>%
   filter(any(concordant == FALSE)) %>% ungroup()
@@ -259,7 +284,8 @@ QC_nonfailures_sex <- result2 %>% filter(concordant2 == "Concordant" )
 meta_sub_sex_unique <- result2 %>% filter(concordant2 == "Discordant" ) %>% distinct(individualID, .keep_all = TRUE)
 
 ```
-**Reported sex vs inferred sex mismatches: `r nrow(QC_failures_sex)` sample(s) from `r nrow(meta_sub_sex_unique)` individuals across all brain tissue regions (n=`r ncol(sc_data2)` total samples).** 
+
+**Reported sex vs inferred sex mismatches: `r nrow(QC_failures_sex)` sample(s) from `r nrow(meta_sub_sex_unique)` individuals across all brain tissue regions (n=`r ncol(sc_data2)` total samples).**
 
 ```{r generate-sex prediction-plots2, warning=FALSE, message=FALSE}
 #plot_sex_scores(result_md)           # XIST vs Y-score scatter
@@ -281,24 +307,19 @@ kable(meta_sub_sex, format = "html", caption = "Reported sex vs inferred sex mis
 
 ```
 
-
 # Validation for FastQC
 
 Examine Phred score and average base content at each position of a read.
 
-Samples fail QC if the Phred score is < 20.
+Samples fail QC if the Phred score is \< 20.
 
-Samples get a QC warning if the Phred score is below Q1 - 1.5 * IQR.
+Samples get a QC warning if the Phred score is below Q1 - 1.5 \* IQR.
 
-Samples get a QC warning if the base content is above Q3 + 1.5 * IQR for any base. 
+Samples get a QC warning if the base content is above Q3 + 1.5 \* IQR for any base.
 
 Samples with 2 or more warnings across all QC metrics fail QC.
 
-
 ```{r fast-qc validation, warning=FALSE, message=FALSE}
-# This code will ONLY run if FastQC is TRUE.
-# If FastQC is FALSE, the code is skipped entirely during knitting.
-
 # Load fastqc stats (Mayo_fq_stats.rds)
 invisible(synLogin(silent=TRUE))
 file_entity3 <- synGet("syn76818030") #.rds "basic_stats", "phred_per_base", "base_content"
@@ -399,15 +420,13 @@ meta_sub_fastqc <- subset(metadata, base_content_warn | phred_score_warn | !phre
 #**FastQC base content warning(s):** `r sum(metadata$base_content_warn)` sample(s)
 ```
 
-
-
 # Validation for MultiQC
 
 Examined percentage of reads mapped and percentage of reads duplicated.
 
-Samples were marked as QC failure if < 70% reads mapped or > 80% duplicated reads.
+Samples were marked as QC failure if \< 70% reads mapped or \> 80% duplicated reads.
 
-Samples were flagged as QC warning if reads mapped reported less than Q1 - 1.5 * IQR or duplicate reads reported more than Q3 + 3 * IQR. QC warnings were evaluated independently for each brain region (tissue type).
+Samples were flagged as QC warning if reads mapped reported less than Q1 - 1.5 \* IQR or duplicate reads reported more than Q3 + 3 \* IQR. QC warnings were evaluated independently for each brain region (tissue type).
 
 ```{r multi-qc validation, echo=FALSE, warning=FALSE, message=FALSE}
 reads_mapped <- 70
@@ -537,8 +556,6 @@ n_mqc_warn <- sum(md_all$reads_mapped_warn |md_all$reads_duplicated_warn |
 
 ```
 
-
-
 ```{r multiqc-table-failures, warning=FALSE, message=FALSE}
 meta_sub_warn <- subset(md_all, reads_mapped_warn | reads_duplicated_warn |
                      !reads_mapped_valid | !reads_duplicated_valid) |>
@@ -605,8 +622,6 @@ tab_summary2 %>%
 
 ```
 
-
-
 # Final samples that passed QC
 
 ```{r saving-rdata-final-QC-tables-part1-tablesetup, warning=FALSE, message=FALSE}
@@ -658,7 +673,8 @@ zeros <- rowSums(counts) == 0
 #table(zeros)
 
 ```
-**`r nrow(md_valid_qc)` of `r nrow(md_all)` samples passed QC.** 
+
+**`r nrow(md_valid_qc)` of `r nrow(md_all)` samples passed QC.**
 
 ```{r final-QC-tables-part2-crosstabs-and-summary, warning=FALSE, message=FALSE}
 
@@ -686,7 +702,7 @@ tab_summary %>%
 
 ```
 
-``` {r final-QC-tables-part3-details-failed-QC, warning=FALSE, message=FALSE}
+```{r final-QC-tables-part3-details-failed-QC, warning=FALSE, message=FALSE}
 
 #failures_detail <- fail_warn %>%
 #  dplyr::select(specimenID, tissue2, valid) %>%
@@ -732,16 +748,15 @@ failures_detail2 %>%
 
 ```
 
-
 # Metadata and clean counts
 
-Uploaded to synapse: "MAYO_md_counts.rds", parent = "syn75817798"
+Uploaded to synapse: "MAYO_md_counts.rds" (metadata and counts), parent = "syn75817798"
 
 *`r nrow(md_valid_qc)` sample(s)*
 
 *`r nrow(counts)` genes(s)*
 
-```{r write synapse rds, eval=FALSE}
+```{r write synapse rds, eval=TRUE, echo=FALSE, include=FALSE, eval=FALSE}
 data_final <- list("metadata" = md_valid_qc, "counts" = counts[!zeros, ])
                    #"multiqc_stats" = multiqc_stats,
                    #"fastqc_stats" = fastqc_basic_stats)
@@ -751,11 +766,9 @@ synapse_file_object <- File(path = "MAYO_md_counts.rds", parent = "syn75817798")
 synStore(synapse_file_object)
 ```
 
-
 # CQN normalization
 
 Final cqn outputs uploaded to synapse: "MAYO_md_counts_cqn.rds", parent = "syn75817798"
-
 
 **Library preparation bias:** Library preparation method is a systematic technical covariate that affects GC content and gene length biases because these curves are not constant across library prep methods.
 
@@ -794,11 +807,11 @@ cqn_E <- cqn_fit$y + cqn_fit$offset
 
 ```
 
-
 ```{r cqn function with output, eval=TRUE, warning=FALSE, include=FALSE}
 # -- 1. Incorporate into limma-voom
 # ── 2. Build DGEList and attach CQN offset ────────────────────────────────────
 library(limma)
+library(edgeR)
 invisible(synLogin(silent=TRUE))
 dge_cqn <- DGEList(counts = counts)
 dge_cqn <- calcNormFactors(dge_cqn, method = "none")  # skip TMM; CQN handles bias
@@ -810,15 +823,16 @@ dge_cqn_row <- rownames(dge_cqn)
 #dge_cqn_df[1:5,1:5]
 rownames(dge_cqn_df) <- dge_cqn_row
 #dge_cqn_df[1:5,1:5]
+```
 
-cqn_save <- list("metadata" = md_valid_qc, "counts" = counts[!zeros, ], "dge_cqn" = dge_cqn, "dge_cqn_df" = dge_cqn_df)
+```{r to-synapse, eval=FALSE}
+cqn_save <- list("metadata" = md_valid_qc, "counts" = counts[!zeros, ], "dge_cqn" = dge_cqn)
 output_filename <- "MAYO_md_counts_cqn.rds"
 saveRDS(cqn_save , file = output_filename)
 synapse_file_object <- File(path = "MAYO_md_counts_cqn.rds", parent = "syn75817798")
 synStore(synapse_file_object)
 
 ```
-
 
 # Full data demographics (both tissues)
 
@@ -864,40 +878,46 @@ kable(
 
 Ran RAN metrics as principal components to account for technical variation
 
-
-```{r RNA metrics as PCA vectors, fig.height=30, fig.width=20}
+```{r RNA metrics as PCA vectors, fig.height=15, fig.width=20}
+invisible(synLogin(silent=TRUE))
 # RNA metrics as principal components / PCA of technical metrics
 md_metrics <- md_valid_qc
 
-# "X..of.chimeric.reads" dropped because all valaues were zero - all other retained
-metric_cols2 <- c("picard_UNPAIRED_READS_EXAMINED"  ,        "picard_READ_PAIRS_EXAMINED"  ,    
-"picard_UNMAPPED_READS"                      ,      "picard_PERCENT_DUPLICATION"                      ,
-"picard_READS_UNMAPPED"                       ,     "rsem_alignable_percent"                          ,
-"rsem_uniquely_aligned_percent"                ,    "samtools_reads_mapped"                           ,
-"samtools_reads_duplicated"                     ,   "samtools_error_rate"                             ,
-"samtools_average_length"                 ,         "samtools_average_quality"                        ,
-"samtools_insert_size_average"             ,        "samtools_percentage_of_properly_paired_reads_...",
-"samtools_reads_mapped_percent"             ,       "samtools_reads_mapped_and_paired_percent"        ,
-"samtools_reads_properly_paired_percent"     ,      "samtools_reads_duplicated_percent"               ,
-"samtools_percent_mapped_X"                   ,     "samtools_percent_mapped_Y"                       ,
-"cutadapt_percent_trimmed_R2"                  ,    "cutadapt_percent_trimmed_R1"                     ,
-"cutadapt_mean_percent_trimmed"                 ,   "Average.input.read.length"                       ,
-"Uniquely.mapped.reads.."                        ,  "Number.of.splices..GT.AG"                        ,
-"Number.of.splices..GC.AG"                        , "Number.of.splices..AT.AC"                        ,
-"Mismatch.rate.per.base..."   ,                     "Deletion.rate.per.base"                          ,
-"Insertion.rate.per.base"      ,                    "X..of.reads.mapped.to.multiple.loci"             ,
-"X..of.reads.mapped.to.too.many.loci",              "X..of.reads.unmapped..too.many.mismatches"       ,
-"X..of.reads.unmapped..too.short"     ,             "X..of.reads.unmapped..other"                     )
+selected_metrics_former <- c("picard_READS_IN_UNIQUE_PAIRS",
+"samtools_reads_unmapped",
+"samtools_reads_duplicated",
+"samtools_mismatches",
+"samtools_error_rate",
+"samtools_average_quality",
+"samtools_outward_oriented_pairs",
+"samtools_percentage_of_properly_paired_reads_...",
+"samtools_percent_mapped_X",
+"Deletion.average.length",
+"X..of.reads.mapped.to.multiple.loci",
+"X..of.reads.mapped.to.too.many.loci")
 
-## adding in technical covariates ----
-# RNA metrics described using PCA
-## RNA metrics PCA to account for technical variability across batches
-#metric_cols <- colnames(md_metrics[,c(33:69)])
-#results_metrics <- compare_methods(md,metric_cols)
-#sig_metrics <- results_metrics %>% filter(p_adj < 0.05) %>% arrange(p_adj) %>% pull(metric)
-#cat("Significant metrics (FDR < 0.05):", length(sig_metrics), "\n")
+# selected based on PCs of counts associated with variability in with Technical Metrics
+# determining_technical_vars_for_RNA_metrics.R
+# first exclude any RNA metric associated with diagnosis
+metrics <- read.csv(synGet("syn76816214")$path, stringsAsFactors = FALSE)
+md_cts <- readRDS(synGet("syn76747558")$path)      # mayo_md_counts.rds
 
-#rownames(md) <- NULL
+out <- qc_diagnosis_assoc(metrics, md_cts$metadata, diagnosis_col = "diagnosis", samples = colnames(counts))
+metrics_keep <- out$metrics_keep   # original metrics minus the significant ones (specimenID kept)
+
+mayo_tv <- select_technical_vars(
+   counts        = md_cts$counts,
+   metadata      = md_cts$metadata,
+  # metrics       = read.csv(synGet("syn76816214")$path, stringsAsFactors = FALSE),
+   metrics       =  metrics_keep,
+   exclude_genes = delete_var2,
+   min_var_explained  = 0.02,
+   n_top_genes   = 5000,
+   cor_cutoff    = 0.90,
+   verbose=FALSE,
+   plots=FALSE
+ )
+selected_metrics <- mayo_tv$final_metrics
 
 library(Polychrome)
 p_colors <- glasbey.colors(19)[-1] #removes first color which is white
@@ -906,15 +926,45 @@ my_shapes <- c(1:19)
 
 # ── p3: PC1 vs PC2 scores, coloured by library prep ─────────────────────────
 rownames(md_metrics) <- md_metrics$specimenID
-metric_cols_mat <- md_metrics[,metric_cols2]
+metric_cols_mat <- md_metrics[,selected_metrics]
 metric_cols_mat <- as.data.frame(metric_cols_mat)
 metric_cols_mat_t <- t(metric_cols_mat)
+
+
+pca_result_outliers <- run_pca_outliers2(metric_cols_mat_t,
+                                         md_metrics,
+                                         var_cutoff = 0,
+                                          center = TRUE,
+                                          scale = TRUE)
+# broken stick - start
+eig <- pca_result_outliers$sd_stats$sd^2
+library(vegan)
+bs <- bstick(length(eig), tot.var = sum(eig))
+#for (k in seq_along(eig)) {
+#  cat(sprintf("PC%d: eigenvalue=%.3f  broken-stick=%.3f  %s\n",
+#              k, eig[k], bs[k], ifelse(eig[k] > bs[k], "RETAIN", "drop")))
+#}
+
+keep  <- eig > bs
+n_ret <- if (all(keep)) length(eig) else which(!keep)[1] - 1   # consecutive rule
+pct   <- 100 * sum(eig[seq_len(n_ret)]) / sum(eig)
+
+cat(sprintf(
+  "**Broken-stick test for which components explain more variance than expected:** %d of %d principal component%s retained (PC1%s), together explaining %.1f%% of total variance.\n\n",
+  n_ret, length(eig), ifelse(n_ret == 1, " was", "s were"),
+  ifelse(n_ret > 1, paste0("–PC", n_ret), ""), pct
+))
+
+if (n_ret == 0) cat("*No component explained more variance than expected under the broken-stick model.*\n\n")
+# broken stick - end
 
 outlier_list <- list()
 pca_result_outliers <- run_pca_outliers2(metric_cols_mat_t,
                                          md_metrics,
+                                         var_cutoff = 10,
                                           center = TRUE,
                                           scale = TRUE)
+
 pca_df <- as.data.frame(pca_result_outliers$scores[,c("specimenID", "PC1","PC2","PC3","PC4","PC5","PC6","is_outlier")])
 
 id_outliers <- pca_result_outliers$outliers$specimenID
@@ -923,7 +973,7 @@ id_outliers_db <- md_metrics[md_metrics$specimenID %in% id_outliers,]
 pca_var <- as.data.frame(pca_result_outliers$var_explained)
 pca_var$PC <- rownames(pca_var)
 pca_var$variance <- pca_var$'pca_result_outliers$var_explained'
-pca_var <- pca_var %>% select(-'pca_result_outliers$var_explained') 
+pca_var <- pca_var %>% dplyr::select(-'pca_result_outliers$var_explained') 
 pca_var <- pca_var[1:10,]
 
 pca_var %>%
@@ -940,14 +990,14 @@ pca_var %>%
 
 
 p1 <- plot_pca(pca_result_outliers, "PC1", "PC2", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
-p2 <- plot_pca(pca_result_outliers, "PC3", "PC4", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p2 <- plot_pca(pca_result_outliers, "PC1", "PC3", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
 
  
-p3a <- plot_pca(pca_result_outliers, "PC1", "PC2", "specimenIdSource" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p3a <- plot_pca(pca_result_outliers, "PC1", "PC2", "diagnosis" , title_var = c(paste("MAYO RNA metrics",sep="") ))
 p3b <- plot_pca(pca_result_outliers, "PC1", "PC2", "flowcell" , title_var = c(paste("MAYO RNA metrics",sep="") ))
 
 # ── p4: loadings — which metrics drive each PC ───────────────────────────────
-p4 <- plot_pca_loadings3(pca_result_outliers, pcs = c("PC1", "PC2", "PC3", "PC4"))
+p4 <- plot_pca_loadings3(pca_result_outliers, pcs = c("PC1", "PC2", "PC3"))
 #ggsave(paste("PCA_loadings_both_sexes_DLPFC.png",sep=""), plot =p4, width = 15, height = 10, dpi = 150)
 
 # ── p5: scree plot ────────────────────────────────────────────────────────────
@@ -956,9 +1006,12 @@ p5 <- plot_scree(pca_result_outliers)
 
 #png("~/ROSMAP_DLPFC_CN_PCC_RNA_metrics_30July2026.png", width = 1700, height = 1900)
 library(patchwork)
-plot_list <- list(p1,p2,p3a,p3b,p4,p5) 
-wrap_plots(plot_list, nrow = 3, ncol = 2)
+plot_list1 <- list(p1,p2,p3a,p3b) 
+wrap_plots(plot_list1, nrow = 2, ncol = 2)
 #dev.off()
+
+plot_list2 <- list(p4,p5) 
+wrap_plots(plot_list2, nrow = 1, ncol = 2)
 
 # metrics_pcs 
 metrics_pca_df <- pca_df %>% dplyr::rename(PC1_metrics = PC1, PC2_metrics = PC2, PC3_metrics = PC3, PC4_metrics = PC4, PC5_metrics = PC5, is_pc_metrics_outlier = is_outlier) %>% dplyr::select(specimenID, PC1_metrics, PC2_metrics, PC3_metrics, PC4_metrics, PC5_metrics, is_pc_metrics_outlier)
@@ -966,8 +1019,6 @@ metrics_pca_df <- pca_df %>% dplyr::rename(PC1_metrics = PC1, PC2_metrics = PC2,
 md_valid_qc_metrics_pca <- merge(md_valid_qc, metrics_pca_df, by="specimenID")
 md_valid_qc_metrics_pca <- md_valid_qc_metrics_pca %>% filter(is_pc_metrics_outlier == FALSE)
 ```
-
-
 
 ```{r addition sample to drop}
 #id_outliers <- pca_result_outliers$outliers$specimenID
@@ -994,8 +1045,6 @@ addition_drop %>%
 
 ```
 
-
-
 ```{r prep of final files}
 md_all <- md_valid_qc_metrics_pca
 counts2 <- counts[,colnames(counts) %in% md_all$specimenID]
@@ -1021,7 +1070,6 @@ dge_cqn_df2 <- dge_cqn_df[,colnames(dge_cqn_df) %in% md_all$specimenID]
 <br>
 
 **Demographics for gene expression models**
-
 
 ```{r final demographics}
 # Prepare frequency counts wide by sex
@@ -1061,12 +1109,12 @@ kable(
   row_spec(0, extra_css = "caption { white-space: nowrap; text-align: left; }")
 ```
 
-```{r FINAL FILES to synapse, include=FALSE}
+```{r FINAL FILES to synapse, include=FALSE, eval=TRUE}
 invisible(synLogin(silent=TRUE))
-cqn_save2 <- list("metadata" = md_all, "counts" = counts2, "dge_cqn" = dge_cqn2, "dge_cqn_df" = dge_cqn_df2)
+cqn_save2 <- list("metadata" = md_all, "counts" = counts2, "dge_cqn" = dge_cqn2)
 output_filename2 <- "MAYO_md_counts_cqn_FINAL.rds"
 saveRDS(cqn_save2 , file = output_filename2)
-synapse_file_object2 <- File(path = "MAYO_md_counts_cqn_FINAL.rds", parent = "syn75817798")
+synapse_file_object2 <- File(path = "MAYO_md_counts_cqn_FINAL.rds", parent = "syn77539791")
 synStore(synapse_file_object2)
 ```
 
@@ -1074,32 +1122,32 @@ synStore(synapse_file_object2)
 
 **Residualized data PCA by batch and diagnosis**
 
-Counts residualized on technical variables, formula: ~ RIN + PC1_metrics + PC2_metrics + PC3_metrics + PC4_metrics + (1|flowcell)
+Counts residualized on technical variables, formula: \~ RIN + PC1_metrics + PC2_metrics + (1\|flowcell)
 
-```{r DE_residual_plots_by_final_batch_and_diagnosis, cache=TRUE, cache.lazy=FALSE}
+```{r DE_residual_plots_by_final_batch_and_diagnosis, cache=TRUE, cache.lazy=FALSE, fig.height=10, fig.width=10}
 ## plots of residualized data by batch and diagnosis
 # J Lundin
 # Aug 10 2026
 invisible(synLogin(silent=TRUE))
 
-file12 <- synGet("syn76748726") # ROSMAP_DE_res.rds
+file12 <- synGet("syn77564049") # mayo_md_res-counts_final.rds
 res12 <- readRDS(file12$path) 
 #ls(res12)
-residual_gene_expression <- res12$residual_gene_expression
+res_counts <- res12$res_counts
 md_res <- res12$metadata
 
 #synLogin()
 # function at bottom - run first
 
-res <- run_pca_res(residual_gene_expression, md_res, "Residuals")
+res <- run_pca_res(res_counts, md_res, "Residuals")
 
 p_res_batch <- pca_scatter_res(res$df, res$pct,
                            colour_var = "flowcell",
-                           title      = "Residuals — colored by batch")
+                           title      = "Residuals, colored by batch")
 
 p_res_cond  <- pca_scatter_res(res$df, res$pct,
                            colour_var = "diagnosis",
-                           title      = "Residuals — colored by diagnosis")
+                           title      = "Residuals, colored by diagnosis")
 
 
 library(patchwork)
@@ -1112,66 +1160,25 @@ rm(res12)
 invisible(gc())
 ```
 
-**Differential expression model with all individual covariates compared with model residualized on technical variable data, all data and FDR<0.05**
+**Differential expression model with all individual covariates compared with model residualized on technical variable data, all data and FDR\<0.05**
 
-Both models use dream weights from voomwithDreamWeights, offsets from CQN normalization, and tissue X sex X diagnosis contrasts (group)
+Both models use dream weights from voomwithDreamWeights, offsets from CQN normalization, and tissue x sex x diagnosis contrasts (group)
 
-_Full model:_ Final models with individual covariates, formula  ~ 0 + group + apoe4Status + age_cat + RIN + PC1_metrics + PC2_metrics + PC3_metrics + PC4_metrics + (1|flowcell) + (1|individualID)
+*Full model:* Final models with individual covariates, formula \~ 0 + group + apoe4Status + age_cat + RIN + PC1_metrics + PC2_metrics + (1\|flowcell) + (1\|individualID)
 
-_Residualized matrix model:_ Final models run with counts residualized on technical variables, formula  ~ 0 + group + apoe4Status + age_cat + (1|individualID)
+*Residualized matrix model:* Final models run with counts residualized on technical variables, formula \~ 0 + group + apoe4Status + age_cat + (1\|individualID)
 
-```{r side-by-side-images2, echo=FALSE, out.width="49%", fig.show="hold", fig.align="default"}
-knitr::include_graphics(c("C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/AMP_AD1_MAYO/MAYO_plots_from_AWS/MAYO_DE_full_vs_resid_females_CER.png","C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/AMP_AD1_MAYO/MAYO_plots_from_AWS/MAYO_DE_full_vs_resid_females_CER_fdr05.png","C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/AMP_AD1_MAYO/MAYO_plots_from_AWS/MAYO_DE_full_vs_resid_females_TCX.png","C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/AMP_AD1_MAYO/MAYO_plots_from_AWS/MAYO_DE_full_vs_resid_females_TCX_fdr05.png"))
+```{r side-by-side-images2, echo=FALSE, out.width="100%", fig.show="hold", fig.align="default"}
+knitr::include_graphics(c("C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/ALL_technical_provenance_staging/plots_full_v_resid_with_prev_diag/MAYO_DE_full_vs_resid_all_contrasts.png"))
 ```
 
-**Volcano plots of differential expression from models using counts**
+**Volcano plots of differential expression from full models**
 
-```{r volcano-grid, fig.width=10, fig.height=7, echo=FALSE}
-invisible(synLogin(silent=TRUE))
-file1 <- synGet("syn76749970") # DE with residualized counts
-de <- readRDS(file1$path) 
-#ls(de)
-females_CER6 <- de$females_CER6_res3
-males_CER6 <- de$males_CER6_res3
-females_TCX6 <- de$females_TCX6_res3
-males_TCX6 <- de$males_TCX6_res3
+```{r volcano-grid-diag2, echo=FALSE, out.width="100%", fig.show="hold", fig.align="center"}
 
-plot_volcano <- function(data, 
-                         title = "Volcano Plot", 
-                         p_cutoff = 0.05, 
-                         sig_color = "#377EB8", 
-                         ns_color = "grey70",
-                         xlim = c(-2, 2),
-                         ylim = NULL) {
-  
-  p <- ggplot(data, aes(x = logFC, y = -log10(adj.P.Val))) +
-    geom_point(aes(color = adj.P.Val < p_cutoff), size = 0.8, alpha = 0.6) +
-    scale_color_manual(
-      values = setNames(c(ns_color, sig_color), c("FALSE", "TRUE")),
-      labels = c("NS", paste0("FDR < ", p_cutoff))
-    ) +
-    geom_hline(yintercept = -log10(p_cutoff), linetype = "dashed", color = "red") +
-    labs(
-      title = title, 
-      x = "log2 Fold Change", 
-      y = "-log10(FDR)",
-      color = NULL
-    ) +
-    coord_cartesian(xlim = xlim, ylim = ylim) +
-    theme_bw(base_size = 11)
-  
-  return(p)
-}
+## Source files for volcano plots
+#file_entity1 <- synapser::synGet('syn77635254') # DE on counts neuro.path diag2 sex.adj
+#file_entity2 <- synapser::synGet('syn77563488') # DE on counts neuro.path diag2 sex.strat
 
-females_CER6_plot <- plot_volcano(data = females_CER6, title = "MAYO, CER, female: Volcano plot")
-males_CER6_plot <- plot_volcano(data = males_CER6,title = "MAYO, CER, male: Volcano plot")
-females_TCX6_plot <- plot_volcano(data = females_TCX6, title = "MAYO, TCX, female: Volcano plot")
-males_TCX6_plot <- plot_volcano(data = males_TCX6, title = "MAYO, TCX, male: Volcano plot")
-
-
-library(patchwork)
-plot_list <- list(females_CER6_plot,males_CER6_plot,
-                  females_TCX6_plot,males_TCX6_plot) 
-wrap_plots(plot_list, nrow = 2, ncol = 2)
-
+knitr::include_graphics(c("C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/ALL_technical_provenance_staging/plots_volcano/DE_MAYO_volcanoes_neuro.path_diag2.png"))
 ```
