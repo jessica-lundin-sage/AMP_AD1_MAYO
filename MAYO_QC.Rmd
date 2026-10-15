@@ -3,18 +3,12 @@ title: "AMP-AD1.0 MAYO QC"
 author: "Jessica Lundin and ADTR Science Team"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output: 
-  pdf_document:
-    toc: true
-    toc_depth: 2
-    latex_engine: xelatex
-    number_sections: false
   html_document:
     embed-resources: true
     self_contained: true
     toc: true
     toc_depth: 2
     toc_float: true
-always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -757,13 +751,13 @@ Uploaded to synapse: "MAYO_md_counts.rds" (metadata and counts), parent = "syn75
 *`r nrow(counts)` genes(s)*
 
 ```{r write synapse rds, eval=TRUE, echo=FALSE, include=FALSE, eval=FALSE}
-data_final <- list("metadata" = md_valid_qc, "counts" = counts[!zeros, ])
+#data_final <- list("metadata" = md_valid_qc, "counts" = counts[!zeros, ])
                    #"multiqc_stats" = multiqc_stats,
                    #"fastqc_stats" = fastqc_basic_stats)
-output_filename <- "MAYO_md_counts.rds"
-saveRDS(data_final, file = output_filename)
-synapse_file_object <- File(path = "MAYO_md_counts.rds", parent = "syn75817798")
-synStore(synapse_file_object)
+#output_filename <- "MAYO_md_counts.rds"
+#saveRDS(data_final, file = output_filename)
+#synapse_file_object <- File(path = "MAYO_md_counts.rds", parent = "syn75817798")
+#synStore(synapse_file_object)
 ```
 
 # CQN normalization
@@ -772,14 +766,13 @@ Final cqn outputs uploaded to synapse: "MAYO_md_counts_cqn.rds", parent = "syn75
 
 **Library preparation bias:** Library preparation method is a systematic technical covariate that affects GC content and gene length biases because these curves are not constant across library prep methods.
 
-```{r cqn, fig.width=12, fig.height=10, echo=FALSE, warning=FALSE}
+```{r cqn, fig.width=6, fig.height=5, echo=FALSE, warning=FALSE}
 invisible(synLogin(silent=TRUE))
 file_entity <- synGet("syn76747558") # MAYO_qc.rds "metadata" and "counts" 
 invisible(list2env(readRDS(file_entity$path), envir = .GlobalEnv))
 
 #dim(counts)
 md <- metadata
-
 
 library(cqn)
 # Align samples 
@@ -820,17 +813,16 @@ dge_cqn$E <- cqn_E
 
 dge_cqn_df <- as.data.frame(dge_cqn)
 dge_cqn_row <- rownames(dge_cqn)
-#dge_cqn_df[1:5,1:5]
 rownames(dge_cqn_df) <- dge_cqn_row
-#dge_cqn_df[1:5,1:5]
+
 ```
 
 ```{r to-synapse, eval=FALSE}
-cqn_save <- list("metadata" = md_valid_qc, "counts" = counts[!zeros, ], "dge_cqn" = dge_cqn)
-output_filename <- "MAYO_md_counts_cqn.rds"
-saveRDS(cqn_save , file = output_filename)
-synapse_file_object <- File(path = "MAYO_md_counts_cqn.rds", parent = "syn75817798")
-synStore(synapse_file_object)
+#cqn_save <- list("metadata" = md_valid_qc, "counts" = counts[!zeros, ], "dge_cqn" = dge_cqn)
+#output_filename <- "MAYO_md_counts_cqn.rds"
+#saveRDS(cqn_save , file = output_filename)
+#synapse_file_object <- File(path = "MAYO_md_counts_cqn.rds", parent = "syn75817798")
+#synStore(synapse_file_object)
 
 ```
 
@@ -866,8 +858,7 @@ kable(
 ) %>%
   kable_styling(
     bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE,
-    position = "center") %>%
+    full_width = FALSE, position = "center") %>%
   row_spec(0, bold = TRUE, color = "white", background = "#444444") %>%
   column_spec(1:num_cols, width = "100px") %>%
   pack_rows(index = table(demo_summary$tissue2)) # Groups rows by Tissue
@@ -878,36 +869,27 @@ kable(
 
 Ran RAN metrics as principal components to account for technical variation
 
-```{r RNA metrics as PCA vectors, fig.height=15, fig.width=20}
+```{r RNA metrics as PCA vectors, fig.height=10, fig.width=15, out.width="100%"}
 invisible(synLogin(silent=TRUE))
 # RNA metrics as principal components / PCA of technical metrics
 md_metrics <- md_valid_qc
 
-selected_metrics_former <- c("picard_READS_IN_UNIQUE_PAIRS",
-"samtools_reads_unmapped",
-"samtools_reads_duplicated",
-"samtools_mismatches",
-"samtools_error_rate",
-"samtools_average_quality",
-"samtools_outward_oriented_pairs",
-"samtools_percentage_of_properly_paired_reads_...",
-"samtools_percent_mapped_X",
-"Deletion.average.length",
-"X..of.reads.mapped.to.multiple.loci",
-"X..of.reads.mapped.to.too.many.loci")
 
-# selected based on PCs of counts associated with variability in with Technical Metrics
-# determining_technical_vars_for_RNA_metrics.R
 # first exclude any RNA metric associated with diagnosis
 metrics <- read.csv(synGet("syn76816214")$path, stringsAsFactors = FALSE)
-md_cts <- readRDS(synGet("syn76747558")$path)      # mayo_md_counts.rds
+md_cts <- counts[,colnames(counts) %in% md_metrics$specimenID]
 
-out <- qc_diagnosis_assoc(metrics, md_cts$metadata, diagnosis_col = "diagnosis", samples = colnames(counts))
+out <- qc_diagnosis_assoc(metrics, md_metrics, diagnosis_col = "diagnosis", samples = colnames(counts))
 metrics_keep <- out$metrics_keep   # original metrics minus the significant ones (specimenID kept)
 
+out2 <- qc_diagnosis_assoc(metrics, md_metrics, diagnosis_col = "sex", samples = colnames(counts))
+metrics_keep2 <- out2$metrics_keep   # original metrics minus the significant ones (specimenID kept)
+
+metrics_keep <- metrics_keep[colnames(metrics_keep) %in% colnames(metrics_keep2)]
+
 mayo_tv <- select_technical_vars(
-   counts        = md_cts$counts,
-   metadata      = md_cts$metadata,
+   counts        = md_cts,
+   metadata      = md_metrics,
   # metrics       = read.csv(synGet("syn76816214")$path, stringsAsFactors = FALSE),
    metrics       =  metrics_keep,
    exclude_genes = delete_var2,
@@ -919,6 +901,9 @@ mayo_tv <- select_technical_vars(
  )
 selected_metrics <- mayo_tv$final_metrics
 
+## adding in technical covariates ----
+# RNA metrics described using PCA
+## RNA metrics PCA to account for technical variability across batches
 library(Polychrome)
 p_colors <- glasbey.colors(19)[-1] #removes first color which is white
 my_shapes <- c(1:19)
@@ -930,7 +915,7 @@ metric_cols_mat <- md_metrics[,selected_metrics]
 metric_cols_mat <- as.data.frame(metric_cols_mat)
 metric_cols_mat_t <- t(metric_cols_mat)
 
-
+## FIRST check for how many significant PCs using broken stick
 pca_result_outliers <- run_pca_outliers2(metric_cols_mat_t,
                                          md_metrics,
                                          var_cutoff = 0,
@@ -940,10 +925,6 @@ pca_result_outliers <- run_pca_outliers2(metric_cols_mat_t,
 eig <- pca_result_outliers$sd_stats$sd^2
 library(vegan)
 bs <- bstick(length(eig), tot.var = sum(eig))
-#for (k in seq_along(eig)) {
-#  cat(sprintf("PC%d: eigenvalue=%.3f  broken-stick=%.3f  %s\n",
-#              k, eig[k], bs[k], ifelse(eig[k] > bs[k], "RETAIN", "drop")))
-#}
 
 keep  <- eig > bs
 n_ret <- if (all(keep)) length(eig) else which(!keep)[1] - 1   # consecutive rule
@@ -958,6 +939,9 @@ cat(sprintf(
 if (n_ret == 0) cat("*No component explained more variance than expected under the broken-stick model.*\n\n")
 # broken stick - end
 
+
+## SECOND run PCA to check for outliers - remove outliers
+rm(outlier_list)
 outlier_list <- list()
 pca_result_outliers <- run_pca_outliers2(metric_cols_mat_t,
                                          md_metrics,
@@ -965,15 +949,25 @@ pca_result_outliers <- run_pca_outliers2(metric_cols_mat_t,
                                           center = TRUE,
                                           scale = TRUE)
 
-pca_df <- as.data.frame(pca_result_outliers$scores[,c("specimenID", "PC1","PC2","PC3","PC4","PC5","PC6","is_outlier")])
-
 id_outliers <- pca_result_outliers$outliers$specimenID
 id_outliers_db <- md_metrics[md_metrics$specimenID %in% id_outliers,]
+md_metrics_minus_outliers <- md_metrics[!(md_metrics$specimenID %in% id_outliers),]
+metric_cols_mat_t_minus_outlier <- metric_cols_mat_t[,!colnames(metric_cols_mat_t) %in% id_outliers]
 
-pca_var <- as.data.frame(pca_result_outliers$var_explained)
+
+## THIRD now with outliers removed, run pca for PCs that represent rna metrics
+pca_result_outliers_forPCs <- run_pca_outliers2(metric_cols_mat_t_minus_outlier,
+                                        md_metrics_minus_outliers,
+                                         var_cutoff = 10,
+                                          center = T,
+                                          scale = T)
+
+pca_df <- as.data.frame(pca_result_outliers$scores[,c("specimenID", "PC1","PC2","PC3","PC4","PC5","PC6","is_outlier")])
+
+pca_var <- as.data.frame(pca_result_outliers_forPCs$var_explained)
 pca_var$PC <- rownames(pca_var)
-pca_var$variance <- pca_var$'pca_result_outliers$var_explained'
-pca_var <- pca_var %>% dplyr::select(-'pca_result_outliers$var_explained') 
+pca_var$variance <- pca_var$'pca_result_outliers_forPCs$var_explained'
+pca_var <- pca_var %>% dplyr::select(-'pca_result_outliers_forPCs$var_explained') 
 pca_var <- pca_var[1:10,]
 
 pca_var %>%
@@ -989,26 +983,20 @@ pca_var %>%
   column_spec(1, width = "4cm")
 
 
-p1 <- plot_pca(pca_result_outliers, "PC1", "PC2", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
-p2 <- plot_pca(pca_result_outliers, "PC1", "PC3", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
-
- 
-p3a <- plot_pca(pca_result_outliers, "PC1", "PC2", "diagnosis" , title_var = c(paste("MAYO RNA metrics",sep="") ))
-p3b <- plot_pca(pca_result_outliers, "PC1", "PC2", "flowcell" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p1 <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC2", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p2 <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC3", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p3a <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC2", "diagnosis" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p3b <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC2", "flowcell" , title_var = c(paste("MAYO RNA metrics",sep="") ))
 
 # ── p4: loadings — which metrics drive each PC ───────────────────────────────
-p4 <- plot_pca_loadings3(pca_result_outliers, pcs = c("PC1", "PC2", "PC3"))
-#ggsave(paste("PCA_loadings_both_sexes_DLPFC.png",sep=""), plot =p4, width = 15, height = 10, dpi = 150)
+p4 <- plot_pca_loadings3(pca_result_outliers_forPCs, pcs = c("PC1", "PC2", "PC3"))
 
 # ── p5: scree plot ────────────────────────────────────────────────────────────
-p5 <- plot_scree(pca_result_outliers)
-#ggsave(paste("PCA_scree_both_sexes_DLPFC.png",sep=""), plot =p5, width = 15, height = 10, dpi = 150)
+p5 <- plot_scree(pca_result_outliers_forPCs)
 
-#png("~/ROSMAP_DLPFC_CN_PCC_RNA_metrics_30July2026.png", width = 1700, height = 1900)
 library(patchwork)
 plot_list1 <- list(p1,p2,p3a,p3b) 
 wrap_plots(plot_list1, nrow = 2, ncol = 2)
-#dev.off()
 
 plot_list2 <- list(p4,p5) 
 wrap_plots(plot_list2, nrow = 1, ncol = 2)
@@ -1046,7 +1034,7 @@ addition_drop %>%
 ```
 
 ```{r prep of final files}
-md_all <- md_valid_qc_metrics_pca
+md_all <- md_valid_qc_metrics_pca[!(md_valid_qc_metrics_pca$specimenID %in% id_outliers),]
 counts2 <- counts[,colnames(counts) %in% md_all$specimenID]
 
 # 1. Create a logical vector of matching columns
@@ -1114,7 +1102,7 @@ invisible(synLogin(silent=TRUE))
 cqn_save2 <- list("metadata" = md_all, "counts" = counts2, "dge_cqn" = dge_cqn2)
 output_filename2 <- "MAYO_md_counts_cqn_FINAL.rds"
 saveRDS(cqn_save2 , file = output_filename2)
-synapse_file_object2 <- File(path = "MAYO_md_counts_cqn_FINAL.rds", parent = "syn77539791")
+synapse_file_object2 <- File(path = "MAYO_md_counts_cqn_FINAL.rds", parent = "syn77801889")
 synStore(synapse_file_object2)
 ```
 
