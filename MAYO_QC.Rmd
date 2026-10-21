@@ -762,17 +762,15 @@ Uploaded to synapse: "MAYO_md_counts.rds" (metadata and counts), parent = "syn75
 
 # CQN normalization
 
-Final cqn outputs uploaded to synapse: "MAYO_md_counts_cqn.rds", parent = "syn75817798"
+Final cqn outputs uploaded to synapse: "MAYO_md_counts_cqn.rds"
 
 **Library preparation bias:** Library preparation method is a systematic technical covariate that affects GC content and gene length biases because these curves are not constant across library prep methods.
 
 ```{r cqn, fig.width=6, fig.height=5, echo=FALSE, warning=FALSE}
 invisible(synLogin(silent=TRUE))
-file_entity <- synGet("syn76747558") # MAYO_qc.rds "metadata" and "counts" 
-invisible(list2env(readRDS(file_entity$path), envir = .GlobalEnv))
-
-#dim(counts)
-md <- metadata
+#file_entity <- synGet("syn76747558") # MAYO_qc.rds "metadata" and "counts" 
+#invisible(list2env(readRDS(file_entity$path), envir = .GlobalEnv))
+#md <- metadata
 
 library(cqn)
 # Align samples 
@@ -956,7 +954,7 @@ metric_cols_mat_t_minus_outlier <- metric_cols_mat_t[,!colnames(metric_cols_mat_
 
 
 ## THIRD now with outliers removed, run pca for PCs that represent rna metrics
-pca_result_outliers_forPCs <- run_pca_outliers2(metric_cols_mat_t_minus_outlier,
+pca_result_outliers_forPCs <- run_pca_rna_metrics(metric_cols_mat_t_minus_outlier,
                                         md_metrics_minus_outliers,
                                          var_cutoff = 10,
                                           center = T,
@@ -983,16 +981,16 @@ pca_var %>%
   column_spec(1, width = "4cm")
 
 
-p1 <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC2", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
-p2 <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC3", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
-p3a <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC2", "diagnosis" , title_var = c(paste("MAYO RNA metrics",sep="") ))
-p3b <- plot_pca(pca_result_outliers_forPCs, "PC1", "PC2", "flowcell" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p1 <- plot_pca(pca_result_outliers, "PC1", "PC2", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p2 <- plot_pca(pca_result_outliers, "PC1", "PC3", "tissue" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p3a <- plot_pca(pca_result_outliers, "PC1", "PC2", "diagnosis" , title_var = c(paste("MAYO RNA metrics",sep="") ))
+p3b <- plot_pca(pca_result_outliers, "PC1", "PC2", "flowcell" , title_var = c(paste("MAYO RNA metrics",sep="") ))
 
 # ── p4: loadings — which metrics drive each PC ───────────────────────────────
-p4 <- plot_pca_loadings3(pca_result_outliers_forPCs, pcs = c("PC1", "PC2", "PC3"))
+p4 <- plot_pca_loadings3(pca_result_outliers, pcs = c("PC1", "PC2", "PC3"))
 
 # ── p5: scree plot ────────────────────────────────────────────────────────────
-p5 <- plot_scree(pca_result_outliers_forPCs)
+p5 <- plot_scree(pca_result_outliers)
 
 library(patchwork)
 plot_list1 <- list(p1,p2,p3a,p3b) 
@@ -1002,10 +1000,10 @@ plot_list2 <- list(p4,p5)
 wrap_plots(plot_list2, nrow = 1, ncol = 2)
 
 # metrics_pcs 
-metrics_pca_df <- pca_df %>% dplyr::rename(PC1_metrics = PC1, PC2_metrics = PC2, PC3_metrics = PC3, PC4_metrics = PC4, PC5_metrics = PC5, is_pc_metrics_outlier = is_outlier) %>% dplyr::select(specimenID, PC1_metrics, PC2_metrics, PC3_metrics, PC4_metrics, PC5_metrics, is_pc_metrics_outlier)
+metrics_pca_df <- pca_df %>% dplyr::rename(PC1_metrics = PC1, PC2_metrics = PC2, PC3_metrics = PC3, PC4_metrics = PC4, PC5_metrics = PC5) %>% dplyr::select(specimenID, PC1_metrics, PC2_metrics, PC3_metrics, PC4_metrics, PC5_metrics)
 
 md_valid_qc_metrics_pca <- merge(md_valid_qc, metrics_pca_df, by="specimenID")
-md_valid_qc_metrics_pca <- md_valid_qc_metrics_pca %>% filter(is_pc_metrics_outlier == FALSE)
+#md_valid_qc_metrics_pca <- md_valid_qc_metrics_pca %>% filter(is_pc_metrics_outlier == FALSE)
 ```
 
 ```{r addition sample to drop}
@@ -1157,7 +1155,7 @@ Both models use dream weights from voomwithDreamWeights, offsets from CQN normal
 *Residualized matrix model:* Final models run with counts residualized on technical variables, formula \~ 0 + group + apoe4Status + age_cat + (1\|individualID)
 
 ```{r side-by-side-images2, echo=FALSE, out.width="100%", fig.show="hold", fig.align="default"}
-knitr::include_graphics(c("C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/ALL_technical_provenance_staging/plots_full_v_resid_with_prev_diag/MAYO_DE_full_vs_resid_all_contrasts.png"))
+knitr::include_graphics(c("C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/ALL_technical_provenance_staging/plots_full_v_resid/MAYO_DE_full_vs_resid_all_contrasts.png"))
 ```
 
 **Volcano plots of differential expression from full models**
@@ -1170,3 +1168,4 @@ knitr::include_graphics(c("C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/
 
 knitr::include_graphics(c("C:/Users/jlundin/OneDrive/git_code/RNASeq_DE/AMP_AD1/ALL_technical_provenance_staging/plots_volcano/DE_MAYO_volcanoes_neuro.path_diag2.png"))
 ```
+
